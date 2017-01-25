@@ -1,0 +1,14 @@
+dnl -- include additional autoconf commands here
+dnl -- do not include AC_OUTPUT, this is called for you
+
+AC_CHECK_LIB([glpk],[glp_create_prob], , [AC_MSG_ERROR([cannot find libglpk])])
+
+AC_CHECK_HEADERS([glpk.h],, [AC_MSG_ERROR([cannot find glpk.h])])
+
+sinclude([ax_pthread.m4])
+
+AX_PTHREAD()
+
+LIBS="$PTHREAD_LIBS $LIBS"
+CFLAGS="$CFLAGS $PTHREAD_CFLAGS"
+CC="$PTHREAD_CC"

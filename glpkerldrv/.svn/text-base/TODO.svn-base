@@ -1,0 +1,3 @@
+glpk aborts if bad arguments are passed to it ... this is rude!
+therefore, wrap the various "set" methods with something that checks 
+that the argument is reasonable first.

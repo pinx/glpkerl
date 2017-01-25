@@ -1,0 +1,6 @@
+-ifndef (GLPKERL_HRL_PREFIX).
+-define (GLPKERL_HRL_PREFIX, true).
+
+-define (automake_prefix, "@prefix@").
+
+-endif.

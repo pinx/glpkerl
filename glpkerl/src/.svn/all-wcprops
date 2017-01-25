@@ -1,0 +1,41 @@
+K 25
+svn:wc:ra_dav:version-url
+V 33
+/svn/!svn/ver/9/trunk/glpkerl/src
+END
+glpkerlprefix.hrl.in
+K 25
+svn:wc:ra_dav:version-url
+V 54
+/svn/!svn/ver/8/trunk/glpkerl/src/glpkerlprefix.hrl.in
+END
+glpksrv.erl
+K 25
+svn:wc:ra_dav:version-url
+V 45
+/svn/!svn/ver/8/trunk/glpkerl/src/glpksrv.erl
+END
+make-interface
+K 25
+svn:wc:ra_dav:version-url
+V 48
+/svn/!svn/ver/8/trunk/glpkerl/src/make-interface
+END
+glpkerlapp.erl
+K 25
+svn:wc:ra_dav:version-url
+V 48
+/svn/!svn/ver/8/trunk/glpkerl/src/glpkerlapp.erl
+END
+Makefile.am.local
+K 25
+svn:wc:ra_dav:version-url
+V 51
+/svn/!svn/ver/8/trunk/glpkerl/src/Makefile.am.local
+END
+glpksup.erl
+K 25
+svn:wc:ra_dav:version-url
+V 45
+/svn/!svn/ver/8/trunk/glpkerl/src/glpksup.erl
+END

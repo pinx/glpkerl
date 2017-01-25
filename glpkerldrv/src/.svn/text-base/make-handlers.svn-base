@@ -1,0 +1,772 @@
+#! /usr/bin/env perl
+
+use warnings;
+use strict;
+
+use glpkdrvspec;
+
+sub is_enum ($)
+{
+  my ($type) = @_;
+
+  return UNIVERSAL::isa ($type, "ARRAY") && $type->[0] eq 'enum';
+}
+
+sub is_struct ($)
+{
+  my ($type) = @_;
+
+  return UNIVERSAL::isa ($type, "ARRAY") && $type->[0] eq 'struct';
+}
+
+sub is_asynchronous ($)
+{
+  my ($type) = @_;
+
+  return UNIVERSAL::isa ($type, "ARRAY") && $type->[0] eq 'asynchronous';
+}
+
+sub type_name ($)
+{
+  my ($type) = @_;
+
+  if (UNIVERSAL::isa ($type, "ARRAY"))
+    {
+      if ($type->[0] eq 'enum')
+        {
+          return "int";
+        }
+      elsif ($type->[0] eq 'struct')
+        {
+          return "$type->[1]";
+        }
+
+      die "unknown type $type->[0]";
+    }
+
+  return $type;
+}
+
+sub output_enum ($$)
+{
+  my ($name, $values) = @_;
+
+  print <<EOD;
+#define deserialize_$name(buf, buflen)                          \\
+  ({                                                            \\
+    uint8_t byte;                                               \\
+    int res;                                                    \\
+                                                                \\
+    if (buflen < 1)                                             \\
+      {                                                         \\
+        goto ERROR;                                             \\
+      }                                                         \\
+                                                                \\
+    memcpy (&byte, buf, 1);                                     \\
+    buf += 1;                                                   \\
+    buflen -= 1;                                                \\
+                                                                \\
+    switch (byte)                                               \\
+      {                                                         \\
+EOD
+  my $i = 0;
+  foreach my $niceval (map { uc $_ } @$values)
+    {
+      print <<EOD;
+        case $i:                                                \\
+          res = $niceval;                                       \\
+                                                                \\
+          break;                                                \\
+                                                                \\
+EOD
+              ++$i;
+            }
+
+  print <<EOD;
+        default:                                                \\
+          goto ERROR;                                           \\
+      }                                                         \\
+                                                                \\
+    res;                                                        \\
+  })
+
+static int
+${name}_to_int (int x)
+{
+  switch (x)
+    {
+EOD
+  my $j = 0;
+
+  foreach my $niceval (map { uc $_ } @$values)
+    {
+      print <<EOD;
+      case $niceval:
+        return $j;
+
+EOD
+              ++$j;
+    }
+
+  print <<EOD;
+      default:
+        return -1;
+    }
+}
+
+static int
+reply_$name (char **rbuf, 
+             int    rv)
+{
+  int x = ${name}_to_int (rv);
+
+  (void) reply_$name; // avoid unused warning
+
+  if (x < 0)
+    {
+      return reply_error (rbuf, "internal_error");
+    }
+  else
+    {
+      return reply_int32_t (rbuf, x);
+    }
+}
+
+EOD
+}
+
+sub output_struct ($$$)
+{
+  my ($name, $elements, $init) = @_;
+
+  print <<EOD;
+#define deserialize_$name(buf, buflen)                          \\
+  ({                                                            \\
+     $name res;                                                 \\
+     $init (&res);                                              \\
+                                                                \\
+EOD
+
+  foreach my $e (@$elements)
+    {
+      my $deserialize = deserialize_method ($e->[0]);
+
+      print <<EOD;
+     res.$e->[1] = $deserialize;                                \\
+EOD
+    }
+
+  print <<EOD;
+                                                                \\
+     res;                                                       \\
+  })
+
+EOD
+}
+
+my %output_io_typefunc_memo;
+
+sub output_io_typefunc ($)
+{
+  my ($typespec) = @_;
+
+  if (UNIVERSAL::isa ($typespec, "ARRAY"))
+    {
+      if ($typespec->[0] eq 'enum')
+        {
+          my $name = $typespec->[1];
+          my $values = $typespec->[2];
+
+          return "" if exists $output_io_typefunc_memo{$name};
+          $output_io_typefunc_memo{$name} = 1;
+
+          output_enum ($name, $values);
+        }
+      elsif ($typespec->[0] eq 'struct')
+        {
+          my $name = $typespec->[1];
+          my $elements = $typespec->[2];
+          my $init = $typespec->[3];
+
+          return "" if exists $output_io_typefunc_memo{$name};
+          $output_io_typefunc_memo{$name} = 1;
+
+          foreach my $a (map { $_->[0] } @$elements)
+            {
+              &output_io_typefunc ($a);
+            }
+
+          output_struct ($name, $elements, $init);
+        }
+      elsif ($typespec->[0] eq 'optional')
+        {
+          &output_io_typefunc ($typespec->[1]);
+        }
+      elsif ($typespec->[0] eq 'asynchronous')
+        {
+          &output_io_typefunc ($typespec->[1]);
+        }
+      else
+        { 
+          die "unknown type $typespec->[0]";
+        }
+    }
+}
+
+sub output_io_typefuncs ()
+{
+  foreach my $spec (@glpkdrvspec::spec)
+    {
+      foreach my $a ($spec->{'return_type'}, 
+                     map { $_->[0] } @{$spec->{'arguments'}})
+        {
+          output_io_typefunc ($a);
+        }
+    }
+}
+
+sub output_from ()
+{
+  print <<EOD;
+enum _FromEmulatorType
+{
+  EMULATOR_REQUEST_GET_SIZES,
+EOD
+  foreach my $spec (@glpkdrvspec::spec)
+    {
+      my $ucname = uc $spec->{'name'};
+
+      print <<EOD;
+  EMULATOR_REQUEST_$ucname,
+EOD
+    }
+
+  print <<EOD;
+  EMULATOR_REQUEST_INVALID = 255
+};
+typedef enum _FromEmulatorType FromEmulatorType;
+
+EOD
+
+  print <<EOD;
+typedef struct _FromEmulator FromEmulator;
+struct _FromEmulator
+{
+  FromEmulatorType                      type;
+
+  union
+    {
+EOD
+
+  foreach my $spec (@glpkdrvspec::spec)
+    {
+      print <<EOD;
+      struct
+        {
+EOD
+
+      foreach my $a (@{$spec->{'arguments'}})
+        {
+          next if $a->[1] =~ m/^d->/ || $a->[0] eq "constant";
+
+          my $typename = type_name ($a->[0]);
+
+          print <<EOD;
+          $typename $a->[1];
+EOD
+        }
+
+      print <<EOD;
+        }               $spec->{'name'};
+EOD
+    }
+
+  print <<EOD;
+    };
+};
+
+typedef struct _DriverData DriverData;
+struct _DriverData 
+{
+  ErlDrvPort            port;
+  glp_prob*             prob;
+
+  uint8_t               solving;
+  pthread_t             thread;
+  pthread_attr_t        attr;
+  ErlDrvTermData        caller;
+  uint64_t              ref;
+  int                   eventfd[2];
+  FromEmulator          from;
+};
+
+EOD
+}
+
+sub deserialize_method ($)
+{
+  my ($type) = @_;
+
+  if (UNIVERSAL::isa ($type, "ARRAY"))
+    {
+      if ($type->[0] eq 'enum')
+        {
+          return "deserialize_$type->[1] (buf, buflen)";
+        }
+      elsif ($type->[0] eq 'struct')
+        {
+          return "deserialize_$type->[1] (buf, buflen)";
+        }
+      elsif ($type->[0] eq 'optional')
+        {
+          my $name = type_name ($type->[1]);
+          my $method = &deserialize_method ($type->[1]);
+          my $default = $type->[2];
+          return "deserialize_optional ($name, buf, buflen, $default, $method)";
+        }
+
+      die "unknown type $type->[0]";
+    }
+
+  if ($type =~ /\*$/)
+    {
+      $type =~ s/\*$//;
+      return "deserialize_ptr ($type, buf, buflen)";
+    }
+
+  $type =~ s/\W+/_/g;
+  
+  return "deserialize_$type (buf, buflen)";
+}
+
+sub output_decode_from ()
+{
+  print <<EOD;
+
+// the funny combination of initialize, cast, and switch
+// is to ensure picking up the compiler warning when the 
+// enumeration is extended
+
+#define command_to_type(val)                                    \\
+  ({                                                            \\
+    FromEmulatorType res = EMULATOR_REQUEST_INVALID;            \\
+                                                                \\
+    switch ((FromEmulatorType) val)                             \\
+      {                                                         \\
+        case EMULATOR_REQUEST_GET_SIZES:                        \\
+EOD
+
+  foreach my $spec (@glpkdrvspec::spec)
+    {
+      my $ucname = uc $spec->{'name'};
+      print <<EOD;
+        case EMULATOR_REQUEST_$ucname:                          \\
+EOD
+    }
+
+  print <<EOD;
+        case EMULATOR_REQUEST_INVALID:                          \\
+          res = val;                                            \\
+          break;                                                \\
+      }                                                         \\
+                                                                \\
+    res;                                                        \\
+  })
+
+EOD
+
+  print <<EOD;
+static FromEmulator
+decode_from (unsigned int command,
+             const char*  buf,
+             int          buflen)
+{
+  FromEmulator from;
+
+  from.type = command_to_type (command);
+
+  switch (from.type)
+    {
+      case EMULATOR_REQUEST_GET_SIZES:
+        break;
+
+EOD
+
+  foreach my $spec (@glpkdrvspec::spec)
+    {
+      my $ucname = uc $spec->{'name'};
+
+      print <<EOD;
+      case EMULATOR_REQUEST_$ucname:
+EOD
+      foreach my $a (@{$spec->{'arguments'}})
+        {
+          next if $a->[1] =~ m/^d->/ || $a->[0] eq "constant";
+          my $method = deserialize_method ($a->[0]);
+
+          print <<EOD;
+        from.$spec->{'name'}.$a->[1] = $method;
+EOD
+        }
+      print <<EOD;
+        break;
+
+EOD
+    }
+  
+  print <<EOD;
+      case EMULATOR_REQUEST_INVALID:
+        break;
+    }
+
+  return from;
+
+ERROR:
+  from.type = EMULATOR_REQUEST_INVALID;
+  return from;
+}
+
+EOD
+}
+
+sub return_type_decl ($)
+{
+  my ($type) = @_;
+
+  if (UNIVERSAL::isa ($type, "ARRAY"))
+    {
+      if ($type->[0] eq 'enum')
+        {
+          return "int";
+        }
+
+      die "unknown type $type->[0]";
+    }
+
+  return $type;
+}
+
+sub return_type_reply ($)
+{
+  my ($type) = @_;
+
+  if (UNIVERSAL::isa ($type, "ARRAY"))
+    {
+      if ($type->[0] eq 'enum')
+        {
+          return $type->[1];
+        }
+
+      die "unknown type $type->[0]";
+    }
+
+  return $type;
+}
+
+my @async_table;
+
+sub output_async_method ($)
+{
+  my ($spec) = @_;
+
+  my $index = scalar @async_table;
+  push @async_table, $spec;
+
+  print <<EOD;
+static void*
+do_$spec->{'function'} (void* p)
+{
+  DriverData* d = (DriverData*) p;
+EOD
+
+  my $rt = return_type_decl ($spec->{'return_type'}->[1]);
+  
+  print "  ";
+  print "$rt rv = " if $rt ne 'void';
+  print "$spec->{'function'} (";
+  
+  print join ", ", 
+        map { ($_->[1] =~ /^d->/ || $_->[0] eq "constant") 
+                ? $_->[1] 
+                : is_struct ($_->[0])
+                  ? "& d->from.$spec->{'name'}.$_->[1]" 
+                  : "d->from.$spec->{'name'}.$_->[1]" 
+            }
+        @{$spec->{'arguments'}};
+  print <<EOD;
+);
+  uint8_t index = $index;
+
+  complete_write (d->eventfd[1], &index, 1);
+  complete_write (d->eventfd[1], &rv, sizeof (rv));
+
+  return NULL;
+}
+
+EOD
+}
+
+sub output_methods ()
+{
+  print <<'EOD';
+static int
+handle_get_sizes (DriverData*  d,
+                  FromEmulator from,
+                  char**       rbuf)
+{
+  uint8_t bytes[2] = { sizeof (int), sizeof (double) };
+  (void) d;
+  (void) from;
+
+  return reply_prefixed_binary (rbuf, "\000", 1, bytes, 2);
+}
+
+EOD
+
+  foreach my $spec (sort { $a->{'name'} cmp $b->{'name'} }
+                    grep { is_asynchronous ($_->{'return_type'}) } 
+                    @glpkdrvspec::spec)
+    {
+      output_async_method ($spec);
+    }
+
+  foreach my $spec (sort { $a->{'name'} cmp $b->{'name'} } @glpkdrvspec::spec)
+    {
+      print <<EOD;
+static int 
+handle_$spec->{'name'} (DriverData*  d,
+                        FromEmulator from,
+                        char**       rbuf)
+{
+EOD
+      if (0 == scalar grep { $_->[1] !~ /^d->/ && $_->[0] ne "constant" } 
+                      @{$spec->{'arguments'}})
+        {
+          print <<EOD;
+  (void) from;
+EOD
+        }
+
+      print <<EOD;
+  if (d->solving)
+    {
+      return reply_error (rbuf, "pending_solve");
+    }
+  else
+    {
+EOD
+      if (! is_asynchronous ($spec->{'return_type'}))
+        {
+          my $rt = return_type_decl ($spec->{'return_type'});
+    
+          print "      ";
+          print "$rt rv = " if $rt ne 'void';
+          print "$spec->{'function'} (";
+    
+          print join ", ", 
+                map { ($_->[1] =~ /^d->/ || $_->[0] eq "constant") 
+                        ? $_->[1] 
+                        : is_struct ($_->[0])
+                          ? "& from.$spec->{'name'}.$_->[1]" 
+                          : "from.$spec->{'name'}.$_->[1]" 
+                    }
+                @{$spec->{'arguments'}};
+    
+          print <<EOD;
+);
+EOD
+
+          if ($rt ne 'void')
+            {
+              my $nicert = return_type_reply ($spec->{'return_type'});
+              $nicert =~ s/\*/ ptr/g;
+              $nicert =~ s/\W+/_/g;
+              print <<EOD;
+      return reply_$nicert (rbuf, rv);
+    }
+}
+
+EOD
+            }
+          else
+            {
+              print <<EOD;
+      return reply_void (rbuf);
+    }
+}
+
+EOD
+            }
+        }
+      else
+        {
+          print <<EOD;
+      d->caller = driver_caller (d->port);
+      d->ref = make_ticket ();
+      d->solving = 1;
+      d->from = from; // NB: just a shallow copy
+
+      if (pthread_create (&d->thread, &d->attr, do_$spec->{'function'}, d))
+        {
+          d->solving = 0;
+
+          return reply_error (rbuf, "pthread_create fail");
+        }
+      else
+        {
+          return reply_uint64_t (rbuf, d->ref);
+        }
+    }
+}
+
+EOD
+        }
+    }
+}
+
+sub output_control ()
+{
+  print <<EOD;
+static int
+control         (ErlDrvData   handle,
+                 unsigned int command,
+                 char*        buf,
+                 int          buflen,
+                 char**       rbuf,
+                 int          rlen)
+{
+  DriverData* d = (DriverData*) handle;
+  FromEmulator from = decode_from (command, buf, buflen);
+  int rv = 0;
+
+  (void) rlen;
+  
+  switch (from.type)
+    {
+      case EMULATOR_REQUEST_GET_SIZES:
+        rv = handle_get_sizes (d, from, rbuf);
+
+        break;
+
+EOD
+  foreach my $spec (@glpkdrvspec::spec)
+    {
+      my $ucname = uc $spec->{'name'};
+
+      print <<EOD;
+      case EMULATOR_REQUEST_$ucname:
+        rv = handle_$spec->{'name'} (d, from, rbuf);
+
+        break;
+
+EOD
+    }
+
+    print <<EOD;
+      case EMULATOR_REQUEST_INVALID:
+        rv = reply_error (rbuf, "invalid_request");
+
+        break;
+    }
+
+  return rv;
+}
+
+EOD
+}
+
+sub async_xform ($)
+{
+  my ($type) = @_;
+
+  if (is_enum ($type))
+    {
+      return "(int32_t) $type->[1]_to_int";
+    }
+  elsif ($type eq 'int32_t')
+    {
+      return "";
+    }
+
+  die "unknown type $type";
+}
+
+sub output_ready_input ()
+{
+  print <<EOD;
+static void
+ready_input (ErlDrvData  handle,
+             ErlDrvEvent event)
+{
+  DriverData* d = (DriverData*) handle;
+  uint8_t index;
+  int res = complete_read (d->eventfd[0], &index, 1);
+
+  (void) event;
+
+  d->solving = 0;
+  pthread_join (d->thread, NULL);
+
+  if (res > 0)
+    {
+      switch (index)
+        {
+EOD
+
+  my $index = 0;
+  foreach my $spec (@async_table)
+    {
+      my $rt = return_type_decl ($spec->{'return_type'}->[1]);
+      my $xform = async_xform ($spec->{'return_type'}->[1]);
+      print <<EOD;
+          case $index:
+            {
+              $rt res;
+              typeof ($xform (res)) xres;
+              ErlDrvBinary* bin = 
+                driver_alloc_binary (sizeof (d->ref) + sizeof (xres));
+              memcpy (bin->orig_bytes, &d->ref, sizeof (d->ref));
+              complete_read (d->eventfd[0], &res, sizeof (res));
+              xres = $xform (res);
+              memcpy (bin->orig_bytes + sizeof (d->ref), &xres, sizeof (xres));
+              {
+                ErlDrvTermData spec[] = { 
+                    ERL_DRV_BINARY, 
+                      TERM_DATA (bin), 
+                      sizeof (d->ref) + sizeof (xres),
+                      0
+                };
+
+                driver_send_term (d->port,
+                                  d->caller,
+                                  spec,
+                                  sizeof (spec) / sizeof (spec[0]));
+
+                driver_free_binary (bin);
+              }
+            }
+
+            break;
+EOD
+      ++$index;
+    }
+
+  print <<EOD;
+        }
+    }
+}
+
+EOD
+}
+
+output_io_typefuncs ();
+
+output_from ();
+
+output_decode_from ();
+
+output_methods ();
+
+output_control ();
+
+output_ready_input ();

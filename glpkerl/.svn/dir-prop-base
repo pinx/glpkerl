@@ -1,0 +1,29 @@
+K 10
+svn:ignore
+V 244
+
+*.pc
+*.tar.gz
+*.tgz
+.package
+Makefile
+Makefile.am
+Makefile.in
+Makefile.otp
+ac-init.generated
+aclocal.m4
+autom4te.cache
+build
+config.guess
+config.log
+config.status
+configure
+configure.ac
+create-package
+fw
+fw-pkgout
+fw-pkgtmp
+install-sh
+missing
+
+END

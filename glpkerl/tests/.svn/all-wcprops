@@ -1,0 +1,23 @@
+K 25
+svn:wc:ra_dav:version-url
+V 36
+/svn/!svn/ver/14/trunk/glpkerl/tests
+END
+Makefile.am.local
+K 25
+svn:wc:ra_dav:version-url
+V 54
+/svn/!svn/ver/14/trunk/glpkerl/tests/Makefile.am.local
+END
+25fv47.mps
+K 25
+svn:wc:ra_dav:version-url
+V 46
+/svn/!svn/ver/8/trunk/glpkerl/tests/25fv47.mps
+END
+testglpkerl.erl
+K 25
+svn:wc:ra_dav:version-url
+V 51
+/svn/!svn/ver/8/trunk/glpkerl/tests/testglpkerl.erl
+END

@@ -1,0 +1,27 @@
+# put whatever (auto)make commands here, they will be included from Makefile.am
+
+dist_erlappsrc_DATA = 		\
+  glpkerl.erl			\
+  $(wildcard *.erl)
+
+dist_erlappinclude_DATA =	\
+  $(wildcard *.hrl)
+
+erlappebin_SCRIPTS =					\
+  @FW_PACKAGE_NAME@.app					\
+  $(patsubst %.erl, %.beam, $(dist_erlappsrc_DATA))
+
+check_DATA =			\
+  .dialyzer_ok			\
+  .@FW_PACKAGE_NAME@.app_ok
+
+glpkerl.erl: $(shell pkg-config --variable=prefix glpkerldrv-4.0)/share/glpkerldrv/glpkdrvspec.pm make-interface
+	./make-interface `pkg-config --variable=prefix glpkerldrv-4.0`/share/glpkerldrv/ > $@
+
+CLEANFILES +=			\
+  glpkerl.erl
+
+EXTRA_DIST += 			\
+  make-interface
+
+@FW_PACKAGE_NAME@.app: glpkerl.erl

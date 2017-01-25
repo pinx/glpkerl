@@ -1,0 +1,11 @@
+K 25
+svn:wc:ra_dav:version-url
+V 38
+/svn/!svn/ver/5/trunk/glpkerldrv/tests
+END
+Makefile.am.local
+K 25
+svn:wc:ra_dav:version-url
+V 56
+/svn/!svn/ver/4/trunk/glpkerldrv/tests/Makefile.am.local
+END

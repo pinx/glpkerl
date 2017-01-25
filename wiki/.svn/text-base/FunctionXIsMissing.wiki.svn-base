@@ -1,0 +1,81 @@
+#summary How to add a binding for function X
+
+= Introduction =
+
+You need function X from GLPK and I haven't defined a mapping for it.
+
+= Details =
+
+The interface is driven from the specification given in [http://code.google.com/p/glpkerl/source/browse/trunk/glpkerldrv/src/glpkdrvspec.pm glpkdrvspec.pm].  Ideally you would just add an entry to the specification and then recompile the C driver and the Erlang source code[[#1 1]].  Of course, this will only work smoothly if the types involved are ones I've already defined how to handle.  The "grammar", such as it is:
+
+{{{
+{
+  name => 'erlang_function_name',
+  function => 'c_function_name',
+  arguments => [ [ TYPE, 'name' ] ...]
+  return_value => TYPE
+}
+}}}
+
+== Primitive Types ==
+
+{{{'void', 'double', 'int32_t'}}}
+
+You should use {{{'int32_t'}}} for {{{'int'}}} (but not {{{'const int32_t*'}}} for {{{'const int[]'}}}, see below). 
+
+== Enumeration Types ==
+
+{{{[ 'enum', 'enumerationname', [ 'lowercase_first_val', 'lowercase_second_val', ... ] ]}}}
+
+This is for when GLPK returns needs something like (GLP_ON | GLP_OFF).  Use lowercase values, which will be uppercased when used in C.
+
+== Pointer Types ==
+
+Pointer types only work as arguments right now, not return values.
+
+When GLPK uses {{{const int[]}}}, you should use {{{'const int*'}}}.  When GLPK uses {{{const double[]}}}, you should use {{{'const double*'}}}.  The whole unit-offset thing (ugh) is dealt with automatically.
+
+== Structure Types ==
+
+Something like {{{const glp_smcp *parm}}} should be represented with the struct type.
+
+{{{[ 'struct', 'c_name', [ [ TYPE, 'member_name' ] ... ], 'c_initializer' ].}}}
+
+so for instance 
+{{{
+[ 'struct',
+  'glp_smcp',
+  [ 
+    [ [ 'optional',
+        [ 'enum',
+          'msglevel',
+          [ 'glp_msg_off', 'glp_msg_err', 'glp_msg_on', 'glp_msg_all']
+        ],
+        'GLP_MSG_ALL'
+      ],
+      'msg_lev'
+    ],
+    [ [ 'optional', 'int32_t', 'INT_MAX' ], 'it_lim' ],
+    [ [ 'optional', 'int32_t', 'INT_MAX' ], 'tm_lim' ],
+  ],
+  'glp_init_smcp'
+],
+}}}
+
+Here I'm using the optional type, which maps 'undefined' in Erlang to a constant on the C side.
+
+{{{[ 'optional', TYPE, 'default_value' ]}}}
+
+== Asynchronous Type ==
+
+This is only allowed as a return type.  It causes the operation to be performed in another thread so that the Erlang VM is not blocked.  Use this for methods that can take a long time to return, e.g., {{{glp_simplex}}}, {{{glp_interior}}}, etc.
+
+{{{[ 'asynchronous', TYPE ]}}}
+
+Hope that helps!
+
+= Footnotes =
+
+== 1 == 
+
+Actually really ideally I would parse the C header file and generate this specification list.

@@ -1,0 +1,33 @@
+K 10
+svn:ignore
+V 293
+
+*.pc
+*.tar.gz
+*.tgz
+.package
+Makefile
+Makefile.am
+Makefile.in
+ac-init.generated
+aclocal.m4
+autom4te.cache
+build
+config.guess
+config.log
+config.status
+config.sub
+configure
+configure.ac
+create-package
+depcomp
+fw
+fw-pkgout
+fw-pkgtmp
+install-sh
+libtool
+ltmain.sh
+missing
+pkgconfig-template.pc.in
+
+END

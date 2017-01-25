@@ -1,0 +1,25 @@
+K 10
+svn:ignore
+V 143
+
+*.bb
+*.bbg
+*.da
+*.gcda
+*.gcna
+*.gcno
+*.gcov
+*.in
+*.la
+*.lo
+.deps
+.libs
+Makefile
+Makefile.am
+config.h
+glpkerl
+glpkerldrv.h
+handlers.c
+stamp-h1
+
+END

@@ -1,0 +1,22 @@
+K 10
+svn:ignore
+V 128
+
+*.bb
+*.bbg
+*.da
+*.gcda
+*.gcna
+*.gcno
+*.gcov
+*.in
+*.la
+*.lo
+.deps
+.libs
+Makefile
+Makefile.am
+test-wrapper.sh
+test-wrapper.sh.in
+
+END

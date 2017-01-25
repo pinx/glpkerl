@@ -1,0 +1,41 @@
+# put whatever (auto)make commands here, they will be included from Makefile.am
+#
+
+pkgdatadir=$(datarootdir)/@FW_PACKAGE_NAME@
+
+lib_LTLIBRARIES =		\
+  libglpkerldrv.la
+
+libglpkerldrv_la_SOURCES = 	\
+  glpkerldrv.c
+
+libglpkerldrv_la_LIBADD = 	\
+  @FW_PKGCONFIG_PREREQS_LIBS@
+
+libglpkerldrv_la_LDFLAGS = 	\
+  -module -avoid-version 
+
+bin_PROGRAMS =			\
+  glpkerl
+
+glpkerl_SOURCES =		\
+  driver2pipe.c			\
+  glpkerl.c
+
+glpkerl_LDADD =			\
+  @FW_PKGCONFIG_PREREQS_LIBS@
+
+handlers.c: make-handlers glpkdrvspec.pm
+	./make-handlers > handlers.c
+
+EXTRA_DIST +=			\
+  make-handlers			\
+  glpkdrvspec.pm
+
+CLEANFILES +=			\
+  handlers.c
+
+pkgdata_DATA =			\
+  glpkdrvspec.pm
+
+glpkerldrv.c: handlers.c

@@ -1,0 +1,53 @@
+K 25
+svn:wc:ra_dav:version-url
+V 42
+/svn/!svn/ver/11/trunk/glpkerldrv/fw-pkgin
+END
+post-remove
+K 25
+svn:wc:ra_dav:version-url
+V 53
+/svn/!svn/ver/4/trunk/glpkerldrv/fw-pkgin/post-remove
+END
+pre-remove
+K 25
+svn:wc:ra_dav:version-url
+V 52
+/svn/!svn/ver/4/trunk/glpkerldrv/fw-pkgin/pre-remove
+END
+Makefile.am.local
+K 25
+svn:wc:ra_dav:version-url
+V 59
+/svn/!svn/ver/4/trunk/glpkerldrv/fw-pkgin/Makefile.am.local
+END
+stop
+K 25
+svn:wc:ra_dav:version-url
+V 46
+/svn/!svn/ver/4/trunk/glpkerldrv/fw-pkgin/stop
+END
+config
+K 25
+svn:wc:ra_dav:version-url
+V 49
+/svn/!svn/ver/11/trunk/glpkerldrv/fw-pkgin/config
+END
+post-install
+K 25
+svn:wc:ra_dav:version-url
+V 54
+/svn/!svn/ver/4/trunk/glpkerldrv/fw-pkgin/post-install
+END
+pre-install
+K 25
+svn:wc:ra_dav:version-url
+V 53
+/svn/!svn/ver/4/trunk/glpkerldrv/fw-pkgin/pre-install
+END
+start
+K 25
+svn:wc:ra_dav:version-url
+V 47
+/svn/!svn/ver/4/trunk/glpkerldrv/fw-pkgin/start
+END

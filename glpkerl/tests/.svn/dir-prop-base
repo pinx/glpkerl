@@ -1,0 +1,20 @@
+K 10
+svn:ignore
+V 156
+
+*.COVER.out
+*.beam
+*.in
+*.test.out
+.*.app_ok
+.*.beam_ok
+.*.erl_ok
+.*.script_ok
+Makefile
+Makefile.am
+erl_crash.dump
+module-*
+otp-test-wrapper.sh
+25fv47.txt
+
+END

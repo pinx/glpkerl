@@ -1,0 +1,59 @@
+K 25
+svn:wc:ra_dav:version-url
+V 37
+/svn/!svn/ver/10/trunk/glpkerldrv/src
+END
+driver2pipe.c
+K 25
+svn:wc:ra_dav:version-url
+V 50
+/svn/!svn/ver/4/trunk/glpkerldrv/src/driver2pipe.c
+END
+glpkerldrv.c
+K 25
+svn:wc:ra_dav:version-url
+V 49
+/svn/!svn/ver/4/trunk/glpkerldrv/src/glpkerldrv.c
+END
+glpkdrvspec.pm
+K 25
+svn:wc:ra_dav:version-url
+V 51
+/svn/!svn/ver/4/trunk/glpkerldrv/src/glpkdrvspec.pm
+END
+glpkerl.c
+K 25
+svn:wc:ra_dav:version-url
+V 46
+/svn/!svn/ver/4/trunk/glpkerldrv/src/glpkerl.c
+END
+driver2pipe.h
+K 25
+svn:wc:ra_dav:version-url
+V 50
+/svn/!svn/ver/4/trunk/glpkerldrv/src/driver2pipe.h
+END
+reply.h
+K 25
+svn:wc:ra_dav:version-url
+V 44
+/svn/!svn/ver/4/trunk/glpkerldrv/src/reply.h
+END
+Makefile.am.local
+K 25
+svn:wc:ra_dav:version-url
+V 54
+/svn/!svn/ver/4/trunk/glpkerldrv/src/Makefile.am.local
+END
+deserialize.h
+K 25
+svn:wc:ra_dav:version-url
+V 50
+/svn/!svn/ver/4/trunk/glpkerldrv/src/deserialize.h
+END
+make-handlers
+K 25
+svn:wc:ra_dav:version-url
+V 50
+/svn/!svn/ver/4/trunk/glpkerldrv/src/make-handlers
+END

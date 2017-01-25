@@ -1,0 +1,496 @@
+#! /usr/bin/env perl
+
+BEGIN { push @INC, $ARGV[0]; }
+
+use warnings;
+use strict;
+
+use glpkdrvspec;
+
+sub output_attributes ()
+{
+  print <<EOD;
+-module (glpkerl).
+-export ([
+EOD
+
+  foreach my $spec (sort { $a->{'name'} cmp $b->{'name'} } @glpkdrvspec::spec)
+    {
+      my $arity = 
+        1 + scalar grep { $_->[1] !~ /^d->/ && $_->[0] ne "constant"; } 
+                   @{$spec->{'arguments'}};
+      print <<EOD;
+           $spec->{'name'}/$arity,
+EOD
+    }
+
+  print <<EOD;
+           new/0,
+           new/1,
+           start/0,
+           stop/0
+         ]).
+
+-record (glpk, { port :: port (),
+                 linked_in :: bool (),
+                 int_size :: integer (),
+                 double_size :: integer () }).
+
+-define (GET_SIZES, 0).
+EOD
+
+  my $command = 1;
+  foreach my $spec (@glpkdrvspec::spec)
+    {
+      my $ucname = uc $spec->{'name'};
+      print <<EOD;
+-define (REQUEST_$ucname, $command).
+EOD
+      ++$command;
+    }
+}
+
+my %types = 
+  ( int32_t => { guard => sub { return "is_integer ($_[0])"; },
+      		 serialize => sub { return "<<$_[0]:32/native-signed>>"; },
+		 deserialize => sub { return "$_[0]:32/native-signed"; },
+		 spec => 'integer ()'
+	       },
+    'const char*' => { guard => sub { return "true"; },
+                       serialize => sub { return "<<(1 + erlang:iolist_size ($_[0])):32/native-unsigned>>, $_[0], <<0:8>>"; },
+                       deserialize => sub { return "$_[0]/binary"; },
+		       spec => 'iolist ()'
+		     },
+    # glpk uses unit-offset, so just pad out the first element
+    'const int*' => { guard => sub { return "is_list ($_[0])"; },
+                      serialize => sub { return "[ <<(1 + length ($_[0])):32/native-unsigned>>, <<0:IntSize/native-signed>>, [ <<$_[0]elem:IntSize/native-signed>> || $_[0]elem <- $_[0] ] ]"; },
+                      deserialize => sub { die "todo"; },
+                      spec => 'list (integer ())'
+                    },
+    # glpk uses unit-offset, so just pad out the first element
+    'const double*' => { guard => sub { return "is_list ($_[0])"; },
+                         serialize => sub { return "[ <<(1 + length ($_[0])):32/native-unsigned>>, <<0:DoubleSize/native-float>>, [ <<$_[0]elem:DoubleSize/native-float>> || $_[0]elem <- $_[0] ] ]"; },
+                         deserialize => sub { die "todo"; },
+                         spec => 'list (number ())'
+                    },
+    'void' => { 
+		spec => 'ok'
+	      },
+    'double' => { guard => sub { return "is_number ($_[0])"; },
+                  serialize => sub { return "<<$_[0]:DoubleSize/native-float>>"; },
+                  deserialize => sub { return "$_[0]:DoubleSize/native-float"; },
+                  spec => 'number ()'
+                },
+  );
+
+sub type_guard ($$)
+{
+  my ($name, $type) = @_;
+
+  if (UNIVERSAL::isa ($type, 'ARRAY'))
+    {
+      if ($type->[0] eq 'enum')
+        {
+          return 
+            join "",
+                 "(",
+                 (join " orelse ", map { "($name =:= '$_')" } @{$type->[2]}),
+                 ")";
+        }
+      elsif ($type->[0] eq 'struct')
+        {
+          # not as tight as it could be ...
+          return "is_list ($name)";
+        }
+
+      die "unknown type $type->[0]";
+    }
+
+  die "unknown type $type" unless exists $types{$type};
+  return $types{$type}->{'guard'} ($name);
+}
+
+sub serialize ($$)
+{
+  my ($name, $type) = @_;
+
+  if (UNIVERSAL::isa ($type, 'ARRAY'))
+    {
+      if ($type->[0] eq 'enum')
+        {
+          my $i = 0;
+          return join "",
+                   "<<(if ",
+                   (join "; ", 
+                      map { my $r = "$name =:= '$_' -> $i"; ++$i; $r; }
+                      @{$type->[2]}),
+                   " end):8>>";
+        }
+      elsif ($type->[0] eq 'struct')
+        {
+          return "[" .
+                 (join ",",
+                 map { my $n = ucfirst $_->[1];
+                       "(fun ($n) -> " .
+                       &serialize ($n, $_->[0]) .
+                       " end) (proplists:get_value ('$_->[1]', $name))"
+                     }
+                 @{$type->[2]}) .
+                 "]";
+        }
+      elsif ($type->[0] eq 'optional')
+        {
+          return "(if $name =:= undefined -> <<0:8>> ; " .
+                 "true -> [ <<1:8>>, " .
+                 &serialize ($name, $type->[1]) .
+                 " ] end)";
+        }
+
+      die "unknown type $type->[0]";
+    }
+
+  die "unknown type $type" unless exists $types{$type};
+  return $types{$type}->{'serialize'} ($name);
+}
+
+sub deserialize ($$)
+{
+  my ($name, $type) = @_;
+
+  die "unknown type $type" unless exists $types{$type};
+
+  return $types{$type}->{'deserialize'} ($name);
+}
+
+sub type_spec ($)
+{
+   my ($type) = @_;
+
+   if (UNIVERSAL::isa ($type, 'ARRAY'))
+     {
+       if ($type->[0] eq 'enum')
+         {
+           return join "",
+                       "(",
+                       (join " | ", map { "'$_'" } @{$type->[2]}),
+                       ")";
+         }
+       elsif ($type->[0] eq 'struct')
+         {
+           # not as tight as it could be ...
+           return "list ({ atom (), any () })";
+         }
+       elsif ($type->[0] eq 'asynchronous')
+         {
+           return &type_spec ($type->[1]);
+         }
+
+       die "unknown type $type->[0]";
+     }
+
+   die "unknown type $type" unless exists $types{$type};
+
+   return $types{$type}->{'spec'};
+}
+
+sub needs_double ($)
+{
+  my ($arguments) = @_;
+
+  foreach my $a (@$arguments)
+    {
+      return 1 if $a->[0] eq 'double' || $a->[0] eq 'const double*';
+
+      return 1 if UNIVERSAL::isa ($a->[0], "ARRAY") && 
+                  $a->[0]->[0] eq 'struct' && 
+                  &needs_double ($a->[0]->[2]);
+
+      return 1 if UNIVERSAL::isa ($a->[0], "ARRAY") &&
+                  $a->[0]->[0] eq 'optional' && 
+                  &needs_double ([ [ $a->[0]->[1], $a->[1] ] ]);
+    }
+
+  return 0;
+}
+
+sub needs_int ($)
+{
+  my ($arguments) = @_;
+
+  foreach my $a (@$arguments)
+    {
+      return 1 if $a->[0] eq 'int' || $a->[0] eq 'const int*';
+
+      return 1 if UNIVERSAL::isa ($a->[0], "ARRAY") && 
+                  $a->[0]->[0] eq 'struct' && 
+                  &needs_int ($a->[0]->[2]);
+
+      return 1 if UNIVERSAL::isa ($a->[0], "ARRAY") &&
+                  $a->[0]->[0] eq 'optional' && 
+                  &needs_int ([ [ $a->[0]->[1], $a->[1] ] ]);
+    }
+
+  return 0;
+}
+
+sub record_function_bind ($$)
+{
+  my ($arguments, $return_type) = @_;
+
+  my $rv = "  #glpk{ port = Port, linked_in = LinkedIn";
+
+  if (needs_double ($arguments) || 
+      needs_double ([ [ $return_type, 'return_value' ] ]))
+    {
+      $rv .= ", double_size = DoubleSize";
+    }
+
+  if (needs_int ($arguments) || 
+      needs_int ([ [ $return_type, 'return_value' ] ]))
+    {
+      $rv .= ", int_size = IntSize";
+    }
+
+  $rv .= " }";
+
+  return $rv;
+}
+
+sub output_functions ()
+{
+  print <<'EOD';
+
+%% @spec new () -> { ok, #glpk {} } | { error, Reason }
+%% @equiv new (false)
+%% @end
+
+-spec new () -> { ok, #glpk {} } | { error, atom () }.
+
+new () ->
+  new (false).
+
+%% @spec new (bool ()) -> { ok, #glpk {} } | { error, Reason }
+%% @doc Construct a new glpk instance.  Corresponds roughly to open_port 
+%% followed by glp_create_prob.
+%% @end
+
+-spec new (bool ()) -> { ok, #glpk {} } | { error, atom () }.
+
+new (LinkedIn = false) ->
+  Port = open_port ({ spawn, glpkerl }, [ { packet, 4 }, nouse_stdio, binary ]),
+  new (Port, LinkedIn);
+new (LinkedIn = true) ->
+  Port = open_port ({ spawn, libglpkerldrv }, [ binary ]),
+  new (Port, LinkedIn).
+
+%% @spec start () -> ok | { error, Reason }
+%% @equiv application:start (glpkerl)
+%% @end
+
+start () ->
+  application:start (glpkerl).
+
+%% @spec stop () -> ok | { error, Reason }
+%% @equiv application:stop (glpkerl)
+%% @end
+
+stop () ->
+  application:stop (glpkerl).
+
+%% @private
+
+new (Port, LinkedIn) ->
+  case catch talk_to_port (Port, LinkedIn, ?GET_SIZES, []) of
+    <<0:8, IntSize:8, DoubleSize:8>> ->
+      { ok, 
+        #glpk { port = Port,
+                linked_in = LinkedIn,
+                int_size = 8 * IntSize,
+                double_size = 8 * DoubleSize } 
+      };
+    { 'EXIT', _ } ->
+      catch port_close (Port),
+      { error, internal_error }
+  end.
+
+%% @private
+
+talk_to_port (Port, true, Command, Msg) ->
+  port_control (Port, Command, Msg);
+talk_to_port (Port, false, Command, Msg) ->
+  true = port_command (Port, [ <<Command:8>>, Msg ]),
+  receive
+    { Port, { data, <<>> } } ->
+      [];
+    { Port, { data, Reply } } ->
+      Reply;
+    { 'EXIT', Port, Reason } ->
+      { 'EXIT', Reason }
+  end.
+
+%% @private
+
+pickup_ticket (_, true, Ticket) ->
+  TicketSize = size (Ticket),
+  receive
+    <<Ticket:TicketSize/binary, Result/binary>> ->
+      Result
+  end;
+pickup_ticket (Port, false, Ticket) ->
+  TicketSize = size (Ticket),
+  receive
+    { Port, { data, <<Ticket:TicketSize/binary, Result/binary>> } } ->
+      Result;
+    { 'EXIT', Port, Reason } ->
+      { 'EXIT', Reason }
+  end.
+
+EOD
+  foreach my $spec (sort { $a->{'name'} cmp $b->{'name'} } @glpkdrvspec::spec)
+    {
+      print '%% @spec ', $spec->{'name'}, ' (';
+      print join ", ",
+            "#glpk {}",
+            map { type_spec ($_->[0]) }
+            grep { $_->[1] !~ /^d->/ && $_->[0] ne "constant"; }
+	    @{$spec->{'arguments'}};
+      print ") -> ", 
+	    type_spec ($spec->{'return_type'}), 
+	    " | { error, Reason }\n";
+      print '%% @doc Corresponds to ', $spec->{'function'}, ".\n";
+      print '%% @end', "\n\n";
+      print "-spec $spec->{'name'} (";
+      print join ", ",
+            "#glpk {}",
+            map { type_spec ($_->[0]) }
+	    grep { $_->[1] !~ /^d->/ && $_->[0] ne "constant"; }
+	    @{$spec->{'arguments'}};
+      print ") -> ", 
+	    type_spec ($spec->{'return_type'}), 
+	    " | { error, atom () | binary () }.\n\n";
+
+      my $ucname = uc $spec->{'name'};
+      print "$spec->{'name'} (\n";
+      print join ",\n  ", 
+            record_function_bind ($spec->{'arguments'}, 
+                                  $spec->{'return_type'}),
+            map { ucfirst $_->[1] } 
+            grep { $_->[1] !~ /^d->/ && $_->[0] ne "constant"; } 
+            @{$spec->{'arguments'}};
+      if (scalar grep { $_->[1] !~ /^d->/ && $_->[0] ne "constant"; } 
+                 @{$spec->{'arguments'}})
+        {
+          print ")\n    when\n      ";
+          print join ",\n      ",
+                map { type_guard (ucfirst $_->[1], $_->[0]) }
+                grep { $_->[1] !~ /^d->/ && $_->[0] ne "constant"; }
+                @{$spec->{'arguments'}};
+        }
+      else
+        {
+          print ")\n";
+        }
+      print <<EOD;
+ ->
+  case catch talk_to_port (Port,
+                           LinkedIn,
+                           ?REQUEST_$ucname,
+                           [
+EOD
+
+      print "                             ",
+            join ",\n                             ",
+	    map { serialize (ucfirst $_->[1], $_->[0]) }
+            grep { $_->[1] !~ /^d->/ && $_->[0] ne "constant"; }
+	    @{$spec->{'arguments'}};
+
+      print <<EOD;
+
+                           ]) of
+EOD
+
+      if ($spec->{'return_type'} eq 'void')
+	{
+	  print <<EOD;
+    [] ->
+      ok;
+EOD
+	}
+      elsif (UNIVERSAL::isa ($spec->{'return_type'}, 'ARRAY'))
+        {
+          if ($spec->{'return_type'}->[0] eq 'enum')
+            {
+              print <<EOD;
+    <<0:8, Result:32/native-signed>> ->
+EOD
+              print "      erlang:element (1 + Result, { ",
+                    (join ", ",
+                     map { "'$_'" }
+                     @{$spec->{'return_type'}->[2]}),
+                    " });\n";
+            }
+          elsif ($spec->{'return_type'}->[0] eq 'asynchronous')
+            {
+              print <<EOD;
+    <<0:8, Ticket/binary>> ->
+      case pickup_ticket (Port, LinkedIn, Ticket) of
+EOD
+              if (UNIVERSAL::isa ($spec->{'return_type'}->[1], 'ARRAY'))
+                {
+                  if ($spec->{'return_type'}->[1]->[0] eq 'enum')
+                    {
+                      print <<EOD;
+        <<Result:32/native-signed>> ->
+EOD
+                      print "            erlang:element (1 + Result, { ",
+                            (join ", ",
+                             map { "'$_'" }
+                             @{$spec->{'return_type'}->[1]->[2]}),
+                            " })\n";
+                    }
+                  else
+                    {
+                      die "unknown type $spec->{'return_type'}->[1]->[0]";
+                    }
+                }
+              else
+                {
+                  my $des = deserialize ('Result', $spec->{'return_type'});
+                  print <<EOD;
+        <<$des>> ->
+          Result
+EOD
+                }
+
+              print <<EOD;
+      end;
+EOD
+            }
+          else
+            { 
+              die "unknown type $spec->{'return_type'}->[0]";
+            }
+         }
+      else
+	{
+	  my $des = deserialize ('Result', $spec->{'return_type'});
+	  print <<EOD;
+    <<0:8, $des>> ->
+      Result;
+EOD
+	}
+
+      print <<EOD;
+    <<1:8, Error/binary>> ->
+      { error, Error };
+    { 'EXIT', _ } ->
+      { error, port_closed }
+  end.
+
+EOD
+    }
+}
+
+output_attributes ();
+
+output_functions ();

@@ -1,0 +1,10 @@
+K 10
+svn:ignore
+V 47
+
+.*.script_ok
+Makefile
+Makefile.am
+Makefile.in
+
+END

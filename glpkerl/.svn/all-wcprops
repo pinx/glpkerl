@@ -1,0 +1,53 @@
+K 25
+svn:wc:ra_dav:version-url
+V 30
+/svn/!svn/ver/36/trunk/glpkerl
+END
+bootstrap
+K 25
+svn:wc:ra_dav:version-url
+V 39
+/svn/!svn/ver/8/trunk/glpkerl/bootstrap
+END
+README
+K 25
+svn:wc:ra_dav:version-url
+V 36
+/svn/!svn/ver/8/trunk/glpkerl/README
+END
+Makefile.am.local
+K 25
+svn:wc:ra_dav:version-url
+V 47
+/svn/!svn/ver/8/trunk/glpkerl/Makefile.am.local
+END
+AUTHORS
+K 25
+svn:wc:ra_dav:version-url
+V 37
+/svn/!svn/ver/8/trunk/glpkerl/AUTHORS
+END
+ChangeLog
+K 25
+svn:wc:ra_dav:version-url
+V 39
+/svn/!svn/ver/8/trunk/glpkerl/ChangeLog
+END
+COPYING
+K 25
+svn:wc:ra_dav:version-url
+V 38
+/svn/!svn/ver/36/trunk/glpkerl/COPYING
+END
+configure.ac.local
+K 25
+svn:wc:ra_dav:version-url
+V 48
+/svn/!svn/ver/8/trunk/glpkerl/configure.ac.local
+END
+NEWS
+K 25
+svn:wc:ra_dav:version-url
+V 34
+/svn/!svn/ver/8/trunk/glpkerl/NEWS
+END

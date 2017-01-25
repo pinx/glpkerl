@@ -1,0 +1,4 @@
+@author Paul Mineiro
+@copyright 2009 Paul Mineiro
+@title GlpkErl
+@doc Erlang interface to GLPK, the Gnu Linear Programming Kit.
